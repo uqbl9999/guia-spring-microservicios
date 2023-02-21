@@ -245,7 +245,7 @@ public class SpringbootServicioProductosApplication {
 </dependency>
 ```
 
-### En el pom.xml
+### En el application.properties
 ```yml
 ## Esta configuración se realiza para hystrix y ribbon
 ## Lo que pasa es que el metodo anotado con @HystrixCommand puede tardar mas del tiempo que puede soportar hystrix
