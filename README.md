@@ -303,7 +303,7 @@ public Item metodoAlternativo(Long id, Integer cantidad) {
 
 
 ## Microservicio Productos
-### En el pom.xml
+### En el controlador
 ```java
 @GetMapping("/ver/{id}")
 public Producto detalle(@PathVariable Long id) {
