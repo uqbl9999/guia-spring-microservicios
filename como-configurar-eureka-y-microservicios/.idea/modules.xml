@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/Nueva carpeta.iml" filepath="$PROJECT_DIR$/.idea/Nueva carpeta.iml" />
+      <module fileurl="file://$PROJECT_DIR$/springboot-servicio-eureka-server/springboot-servicio-eureka-server.iml" filepath="$PROJECT_DIR$/springboot-servicio-eureka-server/springboot-servicio-eureka-server.iml" />
+      <module fileurl="file://$PROJECT_DIR$/springboot-servicio-item/springboot-servicio-item.iml" filepath="$PROJECT_DIR$/springboot-servicio-item/springboot-servicio-item.iml" />
+      <module fileurl="file://$PROJECT_DIR$/springboot-servicio-productos/springboot-servicio-productos.iml" filepath="$PROJECT_DIR$/springboot-servicio-productos/springboot-servicio-productos.iml" />
+    </modules>
+  </component>
+</project>
