@@ -147,3 +147,175 @@ public class SpringbootServicioItemApplication {
 ## recordar usar el mismo nombre que se colocó en el proyecto del microservicio productos
 servicio-productos.ribbon.listOfServers=localhost:8001,localhost:9001
 ```
+
+# Cómo usar Eureka Server con Microservicios
+
+## Eureka Server
+### En el pom.xml
+```xml
+<!-- Las dependencia utilizada es la de spring-cloud-starter-netflix-eureka-server -->
+<!-- para eureka server -->
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+</dependency>
+<!-- Es importante importar jaxb-runtime ya que eureka no lo incluye para versiondes de java 11 en adelante -->
+<!-- Para versiones inferiores a la version 11, como la 8 por ejemplo, entonces ya no es necesario importar jaxb -->
+<dependency>
+	<groupId>org.glassfish.jaxb</groupId>
+	<artifactId>jaxb-runtime</artifactId>
+</dependency>
+```
+
+### En el application.properties
+```yml
+spring.application.name=servicio-eureka-server
+server.port=8761
+
+## Esta configuración permite indicar a eureka que este mismo módulo sera un cliente o no,
+## en caso que implemente algún servicio
+## como para este caso no se necesitara usar al servidor de eureka como cliente tambien
+## entonces se coloca como falso
+eureka.client.register-with-eureka=false
+eureka.client.fetch-registry=false
+```
+
+### En la clase principal de Spring
+```java
+@SpringBootApplication
+// Basta con anotar la clase principal de spring con @EnableEurekaServer
+@EnableEurekaServer
+public class SpringbootServicioEurekaServerApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(SpringbootServicioEurekaServerApplication.class, args);
+    }
+}
+```
+
+## Eureka Client (Microservicio)
+### En el pom.xml
+```xml
+<!-- Se debe importar la dependencia spring-cloud-starter-netflix-eureka-client -->
+<!-- para manejarse como cliente de eureka -->
+<!-- lo mismo deberá hacerse para cada microservicio que quiera registrarse como cliente -->
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+```
+
+### En el application.properties
+```yml
+spring.application.name=servicio-productos
+## Para este microservicio se le indica que el puerto será dinamico con la variable ${PORT:0}
+## ya que se necesitará varias instancias de este microservicio
+server.port=${PORT:0}
+
+## La siguiente linea es para indicar al cliente de eureka un nombre dinamico como nombre de instancia,
+## esto solo aplica para los microservicios que queramos escalar o replicar
+eureka.instance.instance-id=${spring.application.name}:${spring.application.instance_id:${random.value}}
+## La siguiente linea es para indicar al microservicio en donde se encuentra el servidor de eureka
+eureka.client.service-url.defaultZone=http://localhost:8761/eureka
+```
+
+### En la clase principal de Spring
+```java
+@SpringBootApplication
+// Con @EnableEurekaClient en la clase principal se indica que este microservicio será un cliente
+// que tendrá que ser registrado en un servidor de Eureka
+@EnableEurekaClient
+public class SpringbootServicioProductosApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(SpringbootServicioProductosApplication.class, args);
+	}
+}
+```
+
+# Cómo usar Hystrix y Hystrix con Ribbon
+
+## Microservicio Items
+### En el pom.xml
+```xml
+<!-- Hystrix tampoco es compatible con versiones de spring 2.4 en adelante -->
+<!-- Para realizar lo mismo en versiones superiores se utiliza Resilience4J -->
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+</dependency>
+```
+
+### En el pom.xml
+```yml
+## Esta configuración se realiza para hystrix y ribbon
+## Lo que pasa es que el metodo anotado con @HystrixCommand puede tardar mas del tiempo que puede soportar hystrix
+## Por ello es necesario establecer los timeout
+## Ribbon envuelve a hystrix, por tanto es necesario que se coloque el tiempo de hystrix mayor al tiempo de ribbon
+## como se ven en las siguientes lineas: El tiempo de ribbon sumado es 13000ms que es menor a los 20000ms de hystrix
+hystrix.command.default.execution.isolation.thread.timeoutInMilliseconds: 20000
+ribbon.ConnectTimeout: 3000
+ribbon.ReadTimeout: 10000
+```
+
+
+### En la clase principal de spring
+```java
+@EnableFeignClients
+@SpringBootApplication
+@EnableEurekaClient
+// Se debe anotar la clase principal de spring con @EnableCircuitBreaker
+@EnableCircuitBreaker
+@RibbonClient(name = "servicio-productos")
+public class SpringbootServicioItemApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(SpringbootServicioItemApplication.class, args);
+	}
+
+}
+```
+
+### En la clase controller
+```java
+// El metodo a utilizar se deberá anotar con @HystrixCommand
+// Al cual se le indicará el metodo que ejecutará en caso que falle
+@HystrixCommand(fallbackMethod = "metodoAlternativo")
+@GetMapping("/ver/{id}/cantidad/{cantidad}")
+public Item detalle(@PathVariable Long id, @PathVariable Integer cantidad) {
+	return itemService.findById(id, cantidad);
+}
+
+// Este método se ejecutará siempre que "detalle" falle
+// este método deberá recibir los mismos parámetros y devolver el mismo objeto que el metodo  que falló anteriormente (fallbackMethod)
+public Item metodoAlternativo(Long id, Integer cantidad) {
+	Item item = new Item();
+	Producto producto = new Producto();
+
+	item.setCantidad(cantidad);
+	producto.setId(id);
+	producto.setNombre("camara sony");
+	producto.setPrecio(500.00);
+	item.setProducto(producto);
+
+	return item;
+}
+```
+
+
+## Microservicio Productos
+### En el pom.xml
+```java
+@GetMapping("/ver/{id}")
+public Producto detalle(@PathVariable Long id) {
+	Producto producto = productoService.findById(id);
+	//producto.setPort(Integer.parseInt(env.getProperty("local.server.port")));
+	producto.setPort(port);
+	// Se está simulando un tiempo de espera para probarlo con Hystrix y ribbon
+	try {
+		Thread.sleep(2000);
+	} catch (InterruptedException e) {
+		throw new RuntimeException(e);
+	}
+	return productoService.findById(id);
+}
+```
