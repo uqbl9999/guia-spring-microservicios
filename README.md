@@ -442,3 +442,233 @@ public Producto detalle(@PathVariable Long id) {
 }
 ```
 
+# Cómo usar Spring Cloud Gateway
+
+## Uso de gateway con filtro global
+### En el pom.xml
+```xml
+<!-- Importar la dependencia de spring cloud gateway -->
+<!-- Recordar que spring cloud gateway a diferencia de zuul funciona reactivamente -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-gateway</artifactId>
+</dependency>
+```
+
+### En el application.yml
+```yml
+#  spring: es la raíz de la configuración de Spring.
+#  cloud: indica que es una configuración específica para aplicaciones en la nube.
+#  gateway: indica que se está configurando Spring Cloud Gateway.
+#  routes: especifica las rutas que se deben configurar.
+#  En las siguientes líneas se definen dos rutas:
+#
+#  servicio-productos: es el identificador de la ruta. Se utilizará para hacer referencia a esta ruta en otras partes de la configuración.
+#  uri: indica la dirección del servicio al que se está redirigiendo. lb://servicio-productos significa que se está utilizando un balanceador de carga para redirigir la solicitud al servicio "servicio-productos".
+#  predicates: se utiliza para definir las condiciones que deben cumplirse para que una solicitud sea enrutada a esta ruta. En este caso, las condiciones son:
+#  Path=/api/productos/**: la solicitud debe tener la ruta /api/productos seguido de cualquier número de sub-rutas.
+#  Header=token, \d+: el encabezado de la solicitud debe tener una clave llamada token y su valor debe ser un número de uno o más dígitos.
+#  Header=Content-Type,application/json: el encabezado de la solicitud debe tener una clave llamada Content-Type y su valor debe ser application/json.
+#  Method=GET, POST: la solicitud debe ser una solicitud GET o POST.
+#  Query=color, verde: el parámetro de consulta debe ser color y su valor debe ser verde.
+#  Cookie=color, azul: la cookie debe tener una clave llamada color y su valor debe ser azul.
+#  filters: se utiliza para definir los filtros que se deben aplicar a la solicitud antes de que se enrutada a la ruta. En este caso, los filtros son:
+#  StripPrefix=2: elimina los dos primeros segmentos de la ruta (/api/productos).
+#  EjemploCookie=Hola mi mensaje personalizado, usuario, Burandori: agrega una cookie llamada EjemploCookie con un valor de Hola mi mensaje personalizado y dos atributos adicionales usuario y Burandori.
+#  La segunda ruta (servicio-items) es similar, pero tiene diferentes condiciones y filtros. En este caso, solo hay una condición (Path=/api/items/**) y cuatro filtros:
+#
+#  StripPrefix=2: elimina los dos primeros segmentos de la ruta (/api/items).
+#  AddRequestHeader=token-request, 123456: agrega un encabezado de solicitud llamado token-request con un valor de 123456.
+#  AddResponseHeader=token-response, 12345678: agrega un encabezado de respuesta llamado token-response con un valor de 12345678.
+#  SetResponseHeader=Content-Type, text/plain: establece el encabezado de respuesta Content-Type a text/plain.
+#  AddRequestParameter=nombre, burandori: agrega un parámetro de consulta llamado nombre con un valor de burandori.
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: servicio-productos
+          uri: lb://servicio-productos
+          predicates:
+            - Path=/api/productos/**
+#            - Header=token, \d+
+#            - Header=Content-Type,application/json
+#            - Method=GET, POST
+#            - Query=color, verde
+#            - Cookie=color, azul
+          filters:
+            - StripPrefix=2
+            - EjemploCookie=Hola mi mensaje personalizado, usuario, Burandori
+        - id: servicio-items
+          uri: lb://servicio-items
+          predicates:
+            - Path=/api/items/**
+          filters:
+            - StripPrefix=2
+            # Otras cabeceras predeterminadas
+            - AddRequestHeader=token-request, 123456
+            - AddResponseHeader=token-response, 12345678
+            - SetResponseHeader=Content-Type, text/plain
+            - AddRequestParameter=nombre, burandori
+
+## OTRA FORMA DE DEFINIR EL mensaje, cookieValor, cookieNombre
+#spring:
+#  cloud:
+#    gateway:
+#      routes:
+#        - id: servicio-productos
+#          uri: lb://servicio-productos
+#          predicates:
+#            - Path=/api/productos/**
+#          filters:
+#            - StripPrefix=2
+#            - name: Ejemplo
+#              args:
+#                mensaje: Hola mi mensaje personalizado
+#                cookieValor: usuario
+#                cookieNombre: BrandonLee
+#        - id: servicio-items
+#          uri: lb://servicio-items
+#          predicates:
+#            - Path=/api/items/**
+#          filters:
+#            - StripPrefix=2
+```
+
+
+### En la clase principal de spring
+```java
+@SpringBootApplication
+// Se deberá anotar también como cliente de eureka con @EnableEurekaClient
+@EnableEurekaClient
+public class SpringbootServicioGatewayServerApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(SpringbootServicioGatewayServerApplication.class, args);
+	}
+
+}
+```
+
+
+### En la clase del filtro global
+```java
+//    Se define la anotación @Component para que Spring lo reconozca
+//    como un componente que debe ser administrado por el contenedor de Spring.
+//    Se define la clase EjemploGlobalFilter que implementa la interfaz GlobalFilter
+//    y la interfaz Ordered. GlobalFilter es una interfaz que proporciona un punto de
+//    extensión para el procesamiento de solicitudes y respuestas en Spring Cloud Gateway,
+//    y Ordered es una interfaz que se utiliza para definir la orden de los filtros.
+@Component
+public class EjemploGlobalFilter implements GlobalFilter, Ordered {
+
+    private final Logger logger = LoggerFactory.getLogger(EjemploGlobalFilter.class);
+
+    @Override
+    // Este método básicamente se define el filtro pre y post
+    // lo que está antes del retorno del método es el filtro pre
+    // lo que está en el retorno del método es el filtro post
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        logger.info("Ejecutando filtro pre");
+        // exchange representa la petición que llega al gateway y la respuesta que se enviará de regreso
+        // así como modificar sus atributos y headers
+        // Se utiliza mutate para modificar los headers ya que son inmutables
+        exchange.getRequest().mutate().headers(httpHeaders -> httpHeaders.add("token", "123456"));
+
+        // chain representa la cadena de filtros que se ejecutarán en orden para procesar la petición
+        return chain.filter(exchange).then(Mono.fromRunnable(() -> {
+            logger.info("Ejecutando filtro post");
+            // Aca se comprueba si el header token está presente en la solicitud.
+            // En caso afirmativo, se agrega el mismo header a la respuesta
+            Optional.ofNullable(exchange.getRequest().getHeaders().getFirst("token")).ifPresent(valor -> {
+                exchange.getResponse().getHeaders().add("token", valor);
+            });
+            // se agrega una cookie llamada color con el valor rojo a la respuesta
+            exchange.getResponse().getCookies().add("color", ResponseCookie.from("color", "rojo").build());
+            //exchange.getResponse().getHeaders().setContentType(MediaType.TEXT_PLAIN);
+        }));
+    }
+
+    // Aqui se define el orden de ejecución del filtro respecto a otros
+    @Override
+    public int getOrder() {
+        return 1;
+    }
+}
+```
+
+## Uso de gateway con filtro global
+### Clase del filtro personalizado, generalmente sirven para filtros orientados a un servicio en especifico
+```java
+// Se anota con @Component para indicar a spring que será un componente dentro del contenedor
+// extiende AbstractGatewayFilterFactory para crear fábricas de filtros personalizados
+@Component
+public class EjemploGatewayFilterFactory extends AbstractGatewayFilterFactory<EjemploGatewayFilterFactory.Configuracion> {
+
+    private Logger logger = LoggerFactory.getLogger(EjemploGatewayFilterFactory.class);
+
+    // En el constructor pasar por el super la clase abstracta de configuración
+    public EjemploGatewayFilterFactory() {
+        super(Configuracion.class);
+    }
+
+    // Aqui se indica el orden de los campos en la configuración
+    @Override
+    public List<String> shortcutFieldOrder() {
+        return Arrays.asList("mensaje", "cookieNombre", "cookieValor");
+    }
+
+    // con el metodo name() se indica el nombre que tendrá el filtro
+    // Generalmente los nombrese se colocan asi <Nombre>GatewayFilterFactory
+    // tomara lo que este dentro del diamante
+    // si se quiere cambiar dicho valor entonces usar el método name()
+    @Override
+    public String name() {
+        return "EjemploCookie";
+    }
+
+    // El método apply implementa una lógica personalizada en el pre y post-procesamiento de la solicitud entrante
+    @Override
+    public GatewayFilter apply(Configuracion config) {
+        return (exchange, chain) -> {
+            // En esta parte se define el preprocesamiento del filtro
+            logger.info("ejecutando pre gateway filter factory: " + config.mensaje);
+
+            return chain.filter(exchange).then(Mono.fromRunnable(() -> {
+                // En esta parte se define el postprocesamiento del filtro
+                Optional.ofNullable(config.cookieValor).ifPresent(cookie -> {
+                    exchange.getResponse().addCookie(ResponseCookie.from(config.cookieNombre, cookie).build());
+                });
+
+                logger.info("ejecutando post gateway filter factory: " + config.mensaje);
+            }));
+        };
+
+
+
+//        return new OrderedGatewayFilter((exchange, chain) -> {
+//            logger.info("ejecutando pre gateway filter factory: " + config.mensaje);
+//            return chain.filter(exchange).then(Mono.fromRunnable(() -> {
+//
+//                Optional.ofNullable(config.cookieValor).ifPresent(cookie -> {
+//                    exchange.getResponse().addCookie(ResponseCookie.from(config.cookieNombre, cookie).build());
+//                });
+//
+//                logger.info("ejecutando post gateway filter factory: " + config.mensaje);
+//            }));
+//        },2);
+    }
+
+    // Se define una subclase estática Configuracion,
+    // que se utiliza para almacenar la configuración específica del filtro.
+    // En este caso, la clase Configuracion tiene tres propiedades: mensaje, cookieValor y cookieNombre
+    public static class Configuracion {
+        private String mensaje;
+        private String cookieValor;
+        private String cookieNombre;
+
+        /**SETS AND GETS**/
+    }
+}
+
+```
