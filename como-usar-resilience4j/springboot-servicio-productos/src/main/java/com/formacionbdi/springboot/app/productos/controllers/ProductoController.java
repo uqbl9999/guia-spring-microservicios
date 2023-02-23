@@ -1,6 +1,7 @@
 package com.formacionbdi.springboot.app.productos.controllers;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +36,17 @@ public class ProductoController {
 	}
 	
 	@GetMapping("/ver/{id}")
-	public Producto detalle(@PathVariable Long id) {
+	public Producto detalle(@PathVariable Long id) throws InterruptedException {
+		// Esta modificación es para simular el uso del circuitBreaker con el id 10
+		if (id.equals(10L)){
+			throw new IllegalStateException("Producto no encontrado!");
+		}
+
+		// Esta modificación es para simular las llamadas lentas y los timeout con el id 7
+		if (id.equals(7L)){
+			TimeUnit.SECONDS.sleep(5L);
+		}
+
 		Producto producto = productoService.findById(id);
 		producto.setPort(Integer.parseInt(env.getProperty("local.server.port")));
 		//producto.setPort(port);
@@ -47,7 +58,6 @@ public class ProductoController {
 //			throw new RuntimeException(e);
 //		}
 		return productoService.findById(id);
-
 	}
 
 }

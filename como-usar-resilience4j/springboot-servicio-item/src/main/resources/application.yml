@@ -1,0 +1,39 @@
+resilience4j:
+  # circuitbreaker: sección define la configuración de CircuitBreaker.
+  circuitbreaker:
+    configs:
+      # defecto: define la configuración del CircuitBreaker llamada "defecto".
+      defecto:
+        # Establece que analizara cada grupo de 6 peticiones como muestra
+        sliding-window-size: 6
+        # Establece un umbral de taza de falla del 50% para el circuit breaker
+        # Si falla mas del 50% de una muestra de 10 peticiones, entonces el circuito se abre
+        failure-rate-threshold: 50
+        # Establece la duración de espera en el estado abierto del CircuitBreaker en 20 segundos.
+        wait-duration-in-open-state: 20s
+        # Establece el número de llamadas permitidas en el estado semi-abierto del CircuitBreaker en 4.
+        permitted-number-of-calls-in-half-open-state: 4
+        # Establece el umbral de tasa de llamadas lentas en 50%.
+        # Si más del 50% de una muestra de 6 llamadas se ponen lentas, entonces el circuito se abre
+        slow-call-rate-threshold: 50
+        # Establece la duración máxima de una las llamadas lentas en 2 segundos
+        slow-call-duration-threshold: 2s
+    # instances: sección define las instancias de CircuitBreaker.
+    # En este caso, hay una instancia llamada "items" que se basa en la configuración "defecto".
+    # Recordar que si se quiere probar la llamada lenta entonces, el valor de la llamada lenta deberá ser menor al del timelimiter
+    instances:
+      items:
+        base-config: defecto
+  # timelimiter: sección define la configuración del TimeLimiter.
+  timelimiter:
+    configs:
+      # defecto: define la configuración del TimeLimiter llamada "defecto"
+      defecto:
+        # timeout-duration: 2s establece la duración máxima permitida para una llamada en 2 segundos.
+        timeout-duration: 2s
+    # instances: sección define las instancias de TimeLimiter.
+    # En este caso, hay una instancia llamada "items" que se basa en la configuración "defecto".
+    # Recordar que si se quiere probar la llamada lenta entonces, el valor de la llamada lenta deberá ser menor al del timelimiter
+    instances:
+      items:
+        base-config: defecto
