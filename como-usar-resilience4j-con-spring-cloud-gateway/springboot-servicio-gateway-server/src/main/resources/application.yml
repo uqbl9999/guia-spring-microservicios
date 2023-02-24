@@ -1,0 +1,82 @@
+# El ejemplo se realizará con el microservicio productos
+# Se debe pasar crear en el gateway la configuracion para el circuitbreaker
+resilience4j:
+  circuitbreaker:
+    configs:
+      defecto:
+        sliding-window-size: 6
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 20s
+        permitted-number-of-calls-in-half-open-state: 4
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 2s
+    instances:
+      productos:
+        base-config: defecto
+  timelimiter:
+    configs:
+      defecto:
+        timeout-duration: 2s
+    instances:
+      productos:
+        base-config: defecto
+
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: servicio-productos
+          uri: lb://servicio-productos
+          predicates:
+            - Path=/api/productos/**
+#            - Header=token, \d+
+#            - Header=Content-Type,application/json
+#            - Method=GET, POST
+#            - Query=color, verde
+#            - Cookie=color, azul
+          filters:
+            # Se indica que se usara en el filtro el CircuitBreaker
+            # con argumentos como nombre de la instancia del circuibreaker que es productos
+            # que cuando se de un error 500, entonces se redirigirá a la ruta que se especifica en el fallbackuri
+            - name: CircuitBreaker
+              args:
+                name: productos
+                statusCodes: 500
+                fallbackUri: forward:/api/items/ver/9/cantidad/5
+            - StripPrefix=2
+            - EjemploCookie=Hola mi mensaje personalizado, usuario, Burandori
+        - id: servicio-items
+          uri: lb://servicio-items
+          predicates:
+            - Path=/api/items/**
+          filters:
+            - StripPrefix=2
+            # Otras cabeceras predeterminadas
+            - AddRequestHeader=token-request, 123456
+            - AddResponseHeader=token-response, 12345678
+            - SetResponseHeader=Content-Type, text/plain
+            - AddRequestParameter=nombre, burandori
+
+## OTRA FORMA DE DEFINIR EL mensaje, cookieValor, cookieNombre
+#spring:
+#  cloud:
+#    gateway:
+#      routes:
+#        - id: servicio-productos
+#          uri: lb://servicio-productos
+#          predicates:
+#            - Path=/api/productos/**
+#          filters:
+#            - StripPrefix=2
+#            - name: Ejemplo
+#              args:
+#                mensaje: Hola mi mensaje personalizado
+#                cookieValor: usuario
+#                cookieNombre: BrandonLee
+#        - id: servicio-items
+#          uri: lb://servicio-items
+#          predicates:
+#            - Path=/api/items/**
+#          filters:
+#            - StripPrefix=2
