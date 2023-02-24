@@ -672,3 +672,211 @@ public class EjemploGatewayFilterFactory extends AbstractGatewayFilterFactory<Ej
 }
 
 ```
+
+# Cómo usar Resilience4j
+
+## Microservicio productos 
+### En la clase controller
+```java
+@GetMapping("/ver/{id}")
+public Producto detalle(@PathVariable Long id) throws InterruptedException {
+    // Esta modificación es para simular el uso del circuitBreaker con el id 10 
+    if (id.equals(10L)){
+        throw new IllegalStateException("Producto no encontrado!");
+    }
+    
+    // Esta modificación es para simular las llamadas lentas y los timeout con el id 7 
+    if (id.equals(7L)){
+        TimeUnit.SECONDS.sleep(5L);
+    }
+
+    Producto producto = productoService.findById(id);
+    producto.setPort(Integer.parseInt(env.getProperty("local.server.port")));
+    //producto.setPort(port);
+
+    // Se ha descomentado las siguientes lineas para poder realizar la prueba con el timeout
+//		try {
+//			Thread.sleep(2000);
+//		} catch (InterruptedException e) {
+//			throw new RuntimeException(e);
+//		}
+    return productoService.findById(id);
+}
+```
+
+
+## Microservicio items 
+### En el pom.xml
+```xml
+<!--	Se ha está importando circuitbreaker-resilience4j	-->
+<!--	Recordar que este es compatible desde la version 2.4 en	adelante	-->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+</dependency>
+```
+
+### Configuración 1 en la clase AppConfig
+```java
+// Se crea un @Bean para utilizar la configuración de resilience
+// Recordar que la configuracion en bean es de menor precedencia que un archivo properties
+@Bean
+public Customizer<Resilience4JCircuitBreakerFactory> defaultCustomizer(){
+//	factory.configureDefault(id -> new Resilience4JConfigBuilder(id): Configura el CircuitBreakerFactory con una nueva instancia de Resilience4JConfigBuilder.
+//	El parámetro "id" es un identificador único para el CircuitBreaker.
+//	por ahi es donde se pasa el nombre de la instancia por ejemplo "items".
+    return factory -> factory.configureDefault(id -> new Resilience4JConfigBuilder(id)
+            // .circuitBreakerConfig(CircuitBreakerConfig.custom(): Configura la configuración del CircuitBreaker
+            .circuitBreakerConfig(CircuitBreakerConfig.custom()
+                    // Establece que analizara cada grupo de 10 peticiones como muestra
+                    .slidingWindowSize(10)
+                    // Establece un umbral de taza de falla del 50% para el circuit breaker
+                    // Si falla mas del 50% de una muestra de 10 peticiones, entonces el circuito se abre
+                    .failureRateThreshold(50)
+                    // Establece la duración de espera en el estado abierto del CircuitBreaker en 10 segundos.
+                    .waitDurationInOpenState(Duration.ofSeconds(10))
+                    // Establece el número de llamadas permitidas en el estado semi-abierto del CircuitBreaker en 5.
+                    .permittedNumberOfCallsInHalfOpenState(5)
+                    // Establece el umbral de tasa de llamadas lentas en 50%.
+                    // Si más del 50% de una muestra de 10 llamadas se ponen lentas, entonces el circuito se abre
+                    .slowCallRateThreshold(50)
+                    // Establece la duración máxima de una las llamadas lentas en 2 segundos
+                    .slowCallDurationThreshold(Duration.ofSeconds(2L))
+                    .build())
+            // Configura el TimeLimiter del CircuitBreaker.
+            // Aquí se establece el tiempo máximo de espera para una llamada en 3 segundos
+            // El TimeLimiter se utiliza para definir el tiempo máximo que una llamada
+            // puede tardar antes de que se agote el tiempo y se interrumpa, es decir (timeout)
+            .timeLimiterConfig(TimeLimiterConfig.custom().timeoutDuration(Duration.ofSeconds(3L)).build())
+            .build());
+}
+```
+
+### Clase controller 
+```java
+@GetMapping("/ver/{id}/cantidad/{cantidad}")
+public Item detalle(@PathVariable Long id, @PathVariable Integer cantidad) {
+    // cbFactory.create("items") crea una instancia del Circuit Breaker
+    // de Resilience4j con el identificador "items".
+    return cbFactory.create("items")
+            // ejecuta el código de la llamada al servicio de itemService dentro del circuito del Circuit Breaker. 
+            // Si la llamada al servicio es exitosa, 
+            // se devuelve el resultado al usuario final. Si la llamada al servicio falla, 
+            // se llama al método alternativo metodoAlternativo(id, cantidad, e) 
+            // en lugar de devolver un error al usuario final
+            .run(() -> itemService.findById(id, cantidad), e -> metodoAlternativo(id, cantidad, e));
+}
+
+public Item metodoAlternativo(Long id, Integer cantidad, Throwable e) {
+    logger.info(e.getMessage());
+    Item item = new Item();
+    Producto producto = new Producto();
+
+    item.setCantidad(cantidad);
+    producto.setId(id);
+    producto.setNombre("camara sony");
+    producto.setPrecio(500.00);
+    item.setProducto(producto);
+
+    return item;
+}
+```
+
+### Configuración 2 en la clase application.yml (Esta tiene mayor prioridad que una configuracion en una clase)
+```yml
+resilience4j:
+  # circuitbreaker: sección define la configuración de CircuitBreaker.
+  circuitbreaker:
+    configs:
+      # defecto: define la configuración del CircuitBreaker llamada "defecto".
+      defecto:
+        # Establece que analizara cada grupo de 6 peticiones como muestra
+        sliding-window-size: 6
+        # Establece un umbral de taza de falla del 50% para el circuit breaker
+        # Si falla mas del 50% de una muestra de 10 peticiones, entonces el circuito se abre
+        failure-rate-threshold: 50
+        # Establece la duración de espera en el estado abierto del CircuitBreaker en 20 segundos.
+        wait-duration-in-open-state: 20s
+        # Establece el número de llamadas permitidas en el estado semi-abierto del CircuitBreaker en 4.
+        permitted-number-of-calls-in-half-open-state: 4
+        # Establece el umbral de tasa de llamadas lentas en 50%.
+        # Si más del 50% de una muestra de 6 llamadas se ponen lentas, entonces el circuito se abre
+        slow-call-rate-threshold: 50
+        # Establece la duración máxima de una las llamadas lentas en 2 segundos
+        slow-call-duration-threshold: 2s
+    # instances: sección define las instancias de CircuitBreaker.
+    # En este caso, hay una instancia llamada "items" que se basa en la configuración "defecto".
+    # Recordar que si se quiere probar la llamada lenta entonces, el valor de la llamada lenta deberá ser menor al del timelimiter
+    instances:
+      items:
+        base-config: defecto
+  # timelimiter: sección define la configuración del TimeLimiter.
+  timelimiter:
+    configs:
+      # defecto: define la configuración del TimeLimiter llamada "defecto"
+      defecto:
+        # timeout-duration: 2s establece la duración máxima permitida para una llamada en 2 segundos.
+        timeout-duration: 2s
+    # instances: sección define las instancias de TimeLimiter. 
+    # En este caso, hay una instancia llamada "items" que se basa en la configuración "defecto".
+    # Recordar que si se quiere probar la llamada lenta entonces, el valor de la llamada lenta deberá ser menor al del timelimiter
+    instances:
+      items:
+        base-config: defecto
+```
+
+
+### Clase controller, para método con anotación @CircuitBreaker
+```java
+// Si se van a usar anotaciones,
+// quien aplica la configuración de las anotaciones es el applitacion.yml
+// En la anotación @CircuitBreaker se indica que se creará una instancia items
+// Si falla entonces se ejecutará el metodoAlternativo
+@CircuitBreaker(name = "items", fallbackMethod = "metodoAlternativo")
+@GetMapping("/ver2/{id}/cantidad/{cantidad}")
+public Item detalle2(@PathVariable Long id, @PathVariable Integer cantidad) {
+    return itemService.findById(id, cantidad);
+}
+
+public Item metodoAlternativo(Long id, Integer cantidad, Throwable e) {
+    logger.info(e.getMessage());
+    Item item = new Item();
+    Producto producto = new Producto();
+
+    item.setCantidad(cantidad);
+    producto.setId(id);
+    producto.setNombre("camara sony");
+    producto.setPrecio(500.00);
+    item.setProducto(producto);
+
+    return item;
+}
+```
+
+### Clase controller, para método con anotación @CircuitBreaker y @TimeLimiter
+```java
+// En la anotación @CircuitBreaker se indica que se creará una instancia items
+// Si falla entonces se ejecutará el metodoAlternativo2
+// Recordar solo colocar como metodo fallBack en el @CircuitBreaker
+// esto también aplicará para el timeLimiter
+@CircuitBreaker(name = "items", fallbackMethod = "metodoAlternativo2")
+@TimeLimiter(name = "items")
+@GetMapping("/ver3/{id}/cantidad/{cantidad}")
+public CompletableFuture<Item> detalle3(@PathVariable Long id, @PathVariable Integer cantidad) {
+    return CompletableFuture.supplyAsync(() -> itemService.findById(id, cantidad));
+}
+
+public CompletableFuture<Item> metodoAlternativo2(Long id, Integer cantidad, Throwable e) {
+    logger.info(e.getMessage());
+    Item item = new Item();
+    Producto producto = new Producto();
+
+    item.setCantidad(cantidad);
+    producto.setId(id);
+    producto.setNombre("Camara sony");
+    producto.setPrecio(500.00);
+    item.setProducto(producto);
+
+    return CompletableFuture.supplyAsync(() -> item);
+}
+```
