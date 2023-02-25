@@ -950,3 +950,144 @@ spring:
             - SetResponseHeader=Content-Type, text/plain
             - AddRequestParameter=nombre, burandori
 ```
+
+# Cómo usar Spring cloud config server
+
+## Config Server 
+### En el pom.xml
+```xml
+<!--	Agregar la siguiente dependencia al proyecto de spring cloud server config		-->
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-config-server</artifactId>
+</dependency>
+```
+
+### En el application.properties
+```yml
+spring.application.name=config-server
+server.port:8888
+
+# De esta manera se puede configurar de manera local el servidor de configuración
+spring.cloud.config.server.git.uri=file:///C:/Users/bluq1/Desktop/config
+
+# De esta manera se puede configurar de manera online el servidor de configuración
+#spring.cloud.config.server.git.uri=https://github.com/andresguzf/servicio-items-config.git
+```
+
+### En la clase principal de spring
+```java
+// Se anotará con @EnableConfigServer en la clase principal de spring
+@EnableConfigServer
+@SpringBootApplication
+public class SpringbootServicioConfigServerApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(SpringbootServicioConfigServerApplication.class, args);
+	}
+
+}
+```
+
+### La ruta C:/Users/bluq1/Desktop/config se debe inicializar como un repositorio git, además se crearon los siguientes archivos con el siguiente contenido
+```
+# En servicio-items.properties
+server.port=8005
+configuracion.texto=Configurando ambiente por defecto
+
+# En servicio-items-dev.properties
+configuracion.texto=Configurando ambiente de desarrollo
+configuracion.autor.nombre=Brandon
+configuracion.autor.email=brandon@correo.com
+
+# En servicio-items-prod.properties
+server.port=8007
+configuracion.texto=Configurando ambiente de Producción
+```
+
+
+
+
+## Microservicio Items 
+### En el pom.xml
+```xml
+<!--	Con esta dependencia se indica que el microservicio será un cliente de spring cloud config server 	-->
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-config</artifactId>
+</dependency>
+<!--	Con esta dependencia se trae la dependencia de actuator 	-->
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+```
+
+### En el bootstrap.properties
+```yml
+# Se debe crear un archivo bootstra.properties
+# Especificando el nombre de este microservicio
+spring.application.name= servicio-items
+# spring.profiles.active: esta propiedad se utiliza para especificar los perfiles activos de la aplicación.
+# Los perfiles activos se utilizan para cargar diferentes configuraciones de
+# la aplicación en función del entorno de ejecución.
+# En este caso, el perfil activo es dev.
+spring.profiles.active=dev
+# spring.cloud.config.uri: esta propiedad se utiliza para especificar la URL del servidor de configuración remoto.
+# Spring Cloud Config es un servidor de configuración remoto que se utiliza para centralizar
+# la configuración de varias aplicaciones y servicios.
+# En este caso, el servidor de configuración está en la URL http://localhost:8888.
+spring.cloud.config.uri=http://localhost:8888
+# management.endpoints.web.exposure.include:
+# esta propiedad se utiliza para especificar los puntos finales que se deben exponer en la aplicación.
+# Spring Actuator proporciona varios puntos finales para monitorear y administrar una aplicación,
+# como la información de estado, las métricas y más.
+# En este caso, se están exponiendo todos los puntos finales con el asterisco (*).
+management.endpoints.web.exposure.include=*
+```
+
+
+### En el controlador de items
+```java
+// La anotación @RefreshScope de Spring se utiliza para habilitar
+// la actualización dinámica de las propiedades de configuración de una aplicación
+// en tiempo de ejecución. Esto significa que, si se realiza un cambio en la configuración
+// en el servidor de configuración y se envía una solicitud POST al punto final /actuator/refresh,
+// las instancias de los beans se actualizan automáticamente con las nuevas
+// propiedades de configuración sin necesidad de reiniciar la aplicación.
+// Por lo tanto, se recomienda utilizar la anotación @RefreshScope en los componentes
+// de la aplicación que dependen de las propiedades de configuración y que deben
+// actualizarse automáticamente en caso de que se realice un cambio en la configuración.
+@RefreshScope
+@RestController
+public class ItemController {
+	
+	private static Logger log = LoggerFactory.getLogger(ItemController.class);
+	
+	@Autowired
+	private Environment env;
+	
+	@Value("${configuracion.texto}")
+	private String texto;
+
+	// Con este método se realiza la prueba del servidor de configuración por ejemplo comunicandose al
+	// http://localhost:8005/obtener-config
+	@GetMapping("/obtener-config")
+	public ResponseEntity<?> obtenerConfig(@Value("${server.port}") String puerto){
+		
+		log.info(texto);
+		
+		Map<String, String> json = new HashMap<>();
+		json.put("texto", texto);
+		json.put("puerto", puerto);
+		
+		if(env.getActiveProfiles().length>0 && env.getActiveProfiles()[0].equals("dev")) {
+			json.put("autor.nombre", env.getProperty("configuracion.autor.nombre"));
+			json.put("autor.email", env.getProperty("configuracion.autor.email"));
+		}
+		
+		return new ResponseEntity<Map<String, String>>(json, HttpStatus.OK);
+	}
+}
+
+```
