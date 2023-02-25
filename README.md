@@ -880,3 +880,73 @@ public CompletableFuture<Item> metodoAlternativo2(Long id, Integer cantidad, Thr
     return CompletableFuture.supplyAsync(() -> item);
 }
 ```
+
+# Cómo usar Resilience4j y spring cloud gateway
+
+## Gateway 
+### En el pom.xml
+```xml
+<!--	Para ello se necesita la dependencia de resilience4j pero reactiva, es decir reactor-resilience4j	-->
+<!--	ya que spring cloud gateway es reactivo		-->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+</dependency>
+```
+
+### En el application.yml
+```yml
+# El ejemplo se realizará con el microservicio productos
+# Se debe pasar crear en el gateway la configuracion para el circuitbreaker
+resilience4j:
+  circuitbreaker:
+    configs:
+      defecto:
+        sliding-window-size: 6
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 20s
+        permitted-number-of-calls-in-half-open-state: 4
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 2s
+    instances:
+      productos:
+        base-config: defecto
+  timelimiter:
+    configs:
+      defecto:
+        timeout-duration: 2s
+    instances:
+      productos:
+        base-config: defecto
+
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: servicio-productos
+          uri: lb://servicio-productos
+          predicates:
+            - Path=/api/productos/**
+          filters:
+            # Se indica que se usara en el filtro el CircuitBreaker
+            # con argumentos como nombre de la instancia del circuibreaker que es productos
+            # que cuando se de un error 500, entonces se redirigirá a la ruta que se especifica en el fallbackuri
+            - name: CircuitBreaker
+              args:
+                name: productos
+                statusCodes: 500
+                fallbackUri: forward:/api/items/ver/9/cantidad/5
+            - StripPrefix=2
+            - EjemploCookie=Hola mi mensaje personalizado, usuario, Burandori
+        - id: servicio-items
+          uri: lb://servicio-items
+          predicates:
+            - Path=/api/items/**
+          filters:
+            - StripPrefix=2
+            - AddRequestHeader=token-request, 123456
+            - AddResponseHeader=token-response, 12345678
+            - SetResponseHeader=Content-Type, text/plain
+            - AddRequestParameter=nombre, burandori
+```
