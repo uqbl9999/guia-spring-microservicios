@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/como-usar-oauth2-con-zuul.iml" filepath="$PROJECT_DIR$/.idea/como-usar-oauth2-con-zuul.iml" />
+      <module fileurl="file://$PROJECT_DIR$/springboot-servicio-commons/springboot-servicio-commons.iml" filepath="$PROJECT_DIR$/springboot-servicio-commons/springboot-servicio-commons.iml" />
+      <module fileurl="file://$PROJECT_DIR$/springboot-servicio-config-server/springboot-servicio-config-server.iml" filepath="$PROJECT_DIR$/springboot-servicio-config-server/springboot-servicio-config-server.iml" />
+      <module fileurl="file://$PROJECT_DIR$/springboot-servicio-eureka-server/springboot-servicio-eureka-server.iml" filepath="$PROJECT_DIR$/springboot-servicio-eureka-server/springboot-servicio-eureka-server.iml" />
+      <module fileurl="file://$PROJECT_DIR$/springboot-servicio-item/springboot-servicio-item.iml" filepath="$PROJECT_DIR$/springboot-servicio-item/springboot-servicio-item.iml" />
+      <module fileurl="file://$PROJECT_DIR$/springboot-servicio-oauth/springboot-servicio-oauth.iml" filepath="$PROJECT_DIR$/springboot-servicio-oauth/springboot-servicio-oauth.iml" />
+      <module fileurl="file://$PROJECT_DIR$/springboot-servicio-productos/springboot-servicio-productos.iml" filepath="$PROJECT_DIR$/springboot-servicio-productos/springboot-servicio-productos.iml" />
+      <module fileurl="file://$PROJECT_DIR$/springboot-servicio-usuario/springboot-servicio-usuario.iml" filepath="$PROJECT_DIR$/springboot-servicio-usuario/springboot-servicio-usuario.iml" />
+      <module fileurl="file://$PROJECT_DIR$/springboot-servicio-usuarios-commons/springboot-servicio-usuarios-commons.iml" filepath="$PROJECT_DIR$/springboot-servicio-usuarios-commons/springboot-servicio-usuarios-commons.iml" />
+      <module fileurl="file://$PROJECT_DIR$/springboot-servicio-zuul-server/springboot-servicio-zuul-server.iml" filepath="$PROJECT_DIR$/springboot-servicio-zuul-server/springboot-servicio-zuul-server.iml" />
+    </modules>
+  </component>
+</project>
