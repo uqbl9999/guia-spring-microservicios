@@ -1896,3 +1896,147 @@ public class ResourceServerConfig extends ResourceServerConfigurerAdapter {
     }
 }
 ```
+
+# Zipkin, sleuth y rabbitmq
+
+## Microservicio Oauth 
+
+### En el pom.xml de cada microservicio a usar zipkin, sleuth y rabbitmq / Instalación de cada software
+```xml
+<!--	Sleuth es una biblioteca de rastreo distribuido que se utiliza en aplicaciones basadas
+        en Spring Boot. Es parte del ecosistema Spring Cloud y se integra perfectamente
+        con otras herramientas de este ecosistema, como Zipkin	-->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-sleuth</artifactId>
+</dependency>
+<!--	Zipkin es una herramienta de rastreo de solicitudes y trazabilidad de microservicios. Permite
+monitorear y diagnosticar problemas en sistemas distribuidos, proporcionando una visión detallada de cómo
+interactúan los diferentes componentes en un flujo de solicitud.	-->
+<!--	El cliente .jar se puede descargar de https://zipkin.io/	-->
+<!--	Se puede ejecutar ingresando el comando java -jar zipkin-server-x.xx.x-exec.jar	-->
+<!--	Si aparece un error relacionado a Armeria Server, probablemente el puerto esté ocupado	-->
+<!--	Se puede cambiar indicando el puerto con java -jar zipkin-server-2.18.3-exec.jar (Estos son guiones->) &#45;&#45;server.port=9512	-->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-sleuth-zipkin</artifactId>
+</dependency>
+<!--	RabbitMQ es un software de mensajería de código abierto que funciona
+como un intermediario (broker) de mensajes. Permite que diferentes aplicaciones o componentes
+se comuniquen entre sí de manera eficiente y confiable, mediante el intercambio de mensajes a
+través de canales o colas (queues) gestionados por el broker	-->
+<!--	El cliente se puede descargar de https://www.rabbitmq.com/#getstarted	-->
+<!--	Al terminar de descargar se puede solicitar actualizar Erlang	-->
+<!--	Al terminar de instalar, ejecutar el comando rabbitmq-plugins enable rabbitmq_management	-->
+<!--	Luego intentar abrir la UI de rabbitMQ entrando a http://localhost:15672/ -->
+<!--	Con el usuario "guest" y contraseña "guest"	-->
+<!--	En caso que no se pueda abrir el http://localhost:15672/  -->
+<!--	Ejecutar lo siguiente:   -->
+<!--	1.- rabbitmq-service remove		-->
+<!--	2.- rabbitmq-service install	-->
+<!--	3.- rabbitmq-server restart		-->
+<!--	Luego intentar entrar nuevamente	-->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-amqp</artifactId>
+</dependency>
+```
+
+### Vinculando BD MySQL a zipkin y sleuth 
+```
+En lugar de ejecutar directamente zipkin con java -jar zipkin-server-2.18.3-exec.jar
+se creará un archivo zipkin.cmd con la siguiente configuración
+
+@echo off
+set RABBIT_ADDRESSES=localhost:5672
+set STORAGE_TYPE=mysql
+set MYSQL_USER=zipkin
+SET MYSQL_PASS=zipkin
+java -jar ./zipkin-server-2.24.0-exec.jar
+
+Indicando que zipkin se conectará con el servidor de rabbitMQ en el puerto que el servidor de rabbitmq está levantado
+Ademas indicará que usara la base de datos mysql
+y el usuario y contraseña para poder tener acceso al esquema que crearemos después
+A partir de aqui Zipkin se ejecutará arrancando el .cmd 
+```
+
+### Configurando la base de datos
+```
+https://github.com/openzipkin/zipkin#mysql
+Usando el workbench de mysql: 
+Se necesitará crear un esquema de base de datos, por ejemplo en la conexion por defecto de mysql se creará el esquema con el nombre zipkin
+Luego ir a User and privileges para configurar el usuario y password
+agregar una nueva cuenta e indicar como login name: zipkin, limit to host matching: localhost, password: zipkin y por ultimo aplicar
+en esa misma ventana, dirigirse a la pestaña Schemas Privileges, agregar una entrada con "add entry"
+Luego marcar Selected schema y seleccionar la base de datos de zipkin
+Por último, marcar los privilegios que para este caso solo será SELECT, INSERT, UPDATE, DELETE, EXECUTE, SHOW VIEW
+Aplicar cambios
+```
+
+
+### Creando tablas
+```sql
+-- https://github.com/openzipkin/zipkin/blob/master/zipkin-storage/mysql-v1/src/main/resources/mysql.sql
+-- Ejecutar el siguiente script en el esquema creado para zipkin
+
+CREATE TABLE IF NOT EXISTS zipkin_spans (
+  `trace_id_high` BIGINT NOT NULL DEFAULT 0 COMMENT 'If non zero, this means the trace uses 128 bit traceIds instead of 64 bit',
+  `trace_id` BIGINT NOT NULL,
+  `id` BIGINT NOT NULL,
+  `name` VARCHAR(255) NOT NULL,
+  `remote_service_name` VARCHAR(255),
+  `parent_id` BIGINT,
+  `debug` BIT(1),
+  `start_ts` BIGINT COMMENT 'Span.timestamp(): epoch micros used for endTs query and to implement TTL',
+  `duration` BIGINT COMMENT 'Span.duration(): micros used for minDuration and maxDuration query',
+  PRIMARY KEY (`trace_id_high`, `trace_id`, `id`)
+) ENGINE=InnoDB ROW_FORMAT=COMPRESSED CHARACTER SET=utf8 COLLATE utf8_general_ci;
+
+ALTER TABLE zipkin_spans ADD INDEX(`trace_id_high`, `trace_id`) COMMENT 'for getTracesByIds';
+ALTER TABLE zipkin_spans ADD INDEX(`name`) COMMENT 'for getTraces and getSpanNames';
+ALTER TABLE zipkin_spans ADD INDEX(`remote_service_name`) COMMENT 'for getTraces and getRemoteServiceNames';
+ALTER TABLE zipkin_spans ADD INDEX(`start_ts`) COMMENT 'for getTraces ordering and range';
+
+CREATE TABLE IF NOT EXISTS zipkin_annotations (
+  `trace_id_high` BIGINT NOT NULL DEFAULT 0 COMMENT 'If non zero, this means the trace uses 128 bit traceIds instead of 64 bit',
+  `trace_id` BIGINT NOT NULL COMMENT 'coincides with zipkin_spans.trace_id',
+  `span_id` BIGINT NOT NULL COMMENT 'coincides with zipkin_spans.id',
+  `a_key` VARCHAR(255) NOT NULL COMMENT 'BinaryAnnotation.key or Annotation.value if type == -1',
+  `a_value` BLOB COMMENT 'BinaryAnnotation.value(), which must be smaller than 64KB',
+  `a_type` INT NOT NULL COMMENT 'BinaryAnnotation.type() or -1 if Annotation',
+  `a_timestamp` BIGINT COMMENT 'Used to implement TTL; Annotation.timestamp or zipkin_spans.timestamp',
+  `endpoint_ipv4` INT COMMENT 'Null when Binary/Annotation.endpoint is null',
+  `endpoint_ipv6` BINARY(16) COMMENT 'Null when Binary/Annotation.endpoint is null, or no IPv6 address',
+  `endpoint_port` SMALLINT COMMENT 'Null when Binary/Annotation.endpoint is null',
+  `endpoint_service_name` VARCHAR(255) COMMENT 'Null when Binary/Annotation.endpoint is null'
+) ENGINE=InnoDB ROW_FORMAT=COMPRESSED CHARACTER SET=utf8 COLLATE utf8_general_ci;
+
+ALTER TABLE zipkin_annotations ADD UNIQUE KEY(`trace_id_high`, `trace_id`, `span_id`, `a_key`, `a_timestamp`) COMMENT 'Ignore insert on duplicate';
+ALTER TABLE zipkin_annotations ADD INDEX(`trace_id_high`, `trace_id`, `span_id`) COMMENT 'for joining with zipkin_spans';
+ALTER TABLE zipkin_annotations ADD INDEX(`trace_id_high`, `trace_id`) COMMENT 'for getTraces/ByIds';
+ALTER TABLE zipkin_annotations ADD INDEX(`endpoint_service_name`) COMMENT 'for getTraces and getServiceNames';
+ALTER TABLE zipkin_annotations ADD INDEX(`a_type`) COMMENT 'for getTraces and autocomplete values';
+ALTER TABLE zipkin_annotations ADD INDEX(`a_key`) COMMENT 'for getTraces and autocomplete values';
+ALTER TABLE zipkin_annotations ADD INDEX(`trace_id`, `span_id`, `a_key`) COMMENT 'for dependencies job';
+
+CREATE TABLE IF NOT EXISTS zipkin_dependencies (
+  `day` DATE NOT NULL,
+  `parent` VARCHAR(255) NOT NULL,
+  `child` VARCHAR(255) NOT NULL,
+  `call_count` BIGINT,
+  `error_count` BIGINT,
+  PRIMARY KEY (`day`, `parent`, `child`)
+) ENGINE=InnoDB ROW_FORMAT=COMPRESSED CHARACTER SET=utf8 COLLATE utf8_general_ci;
+```
+
+
+### Configurando la base de datos
+```
+https://github.com/openzipkin/zipkin#mysql
+Se necesitará crear un esquema de base de datos, por ejemplo en la conexion por defecto de mysql se creará el esquema con el nombre zipkin
+Luego ir a User and privileges para configurar el usuario y password
+agregar una nueva cuenta e indicar como login name: zipkin, limit to host matching: localhost, password: zipkin y por ultimo aplicar
+en esa misma ventana, dirigirse a la pestaña
+```
+
+
