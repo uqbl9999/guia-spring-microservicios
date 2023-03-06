@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>2.7.9</version>
+		<relativePath/> <!-- lookup parent from repository -->
+	</parent>
+	<groupId>com.formacionbdi.springboot.app.oauth</groupId>
+	<artifactId>springboot-servicio-oauth</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>springboot-servicio-oauth</name>
+	<description>springboot-servicio-oauth</description>
+	<properties>
+		<java.version>11</java.version>
+		<spring-cloud.version>2021.0.5</spring-cloud.version>
+	</properties>
+	<dependencies>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-openfeign</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-devtools</artifactId>
+			<scope>runtime</scope>
+			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.formacionbdi.springboot.app.commons.usuarios</groupId>
+			<artifactId>springboot-servicio-usuarios-commons</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.springframework.boot</groupId>
+					<artifactId>spring-boot-starter-data-jpa</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.security.oauth</groupId>
+			<artifactId>spring-security-oauth2</artifactId>
+			<version>2.3.8.RELEASE</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-jwt</artifactId>
+			<version>1.1.1.RELEASE</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.glassfish.jaxb</groupId>
+			<artifactId>jaxb-runtime</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-bootstrap</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-config</artifactId>
+		</dependency>
+
+		<!--	Sleuth es una biblioteca de rastreo distribuido que se utiliza en aplicaciones basadas
+		en Spring Boot. Es parte del ecosistema Spring Cloud y se integra perfectamente
+		con otras herramientas de este ecosistema, como Zipkin	-->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-sleuth</artifactId>
+		</dependency>
+		<!--	Zipkin es una herramienta de rastreo de solicitudes y trazabilidad de microservicios. Permite
+		monitorear y diagnosticar problemas en sistemas distribuidos, proporcionando una visión detallada de cómo
+		interactúan los diferentes componentes en un flujo de solicitud.	-->
+		<!--	El cliente .jar se puede descargar de https://zipkin.io/	-->
+		<!--	Se puede ejecutar ingresando el comando java -jar zipkin-server-x.xx.x-exec.jar	-->
+		<!--	Si aparece un error relacionado a Armeria Server, probablemente el puerto esté ocupado	-->
+		<!--	Se puede cambiar indicando el puerto con java -jar zipkin-server-2.18.3-exec.jar (Estos son guiones->) &#45;&#45;server.port=9512	-->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-sleuth-zipkin</artifactId>
+		</dependency>
+		<!--	RabbitMQ es un software de mensajería de código abierto que funciona
+		como un intermediario (broker) de mensajes. Permite que diferentes aplicaciones o componentes
+		se comuniquen entre sí de manera eficiente y confiable, mediante el intercambio de mensajes a
+		través de canales o colas (queues) gestionados por el broker	-->
+		<!--	El cliente se puede descargar de https://www.rabbitmq.com/#getstarted	-->
+		<!--	Al terminar de descargar se puede solicitar actualizar Erlang	-->
+		<!--	Al terminar de instalar, ejecutar el comando rabbitmq-plugins enable rabbitmq_management	-->
+		<!--	Luego intentar abrir la UI de rabbitMQ entrando a http://localhost:15672/ -->
+		<!--	Con el usuario "guest" y contraseña "guest"	-->
+		<!--	En caso que no se pueda abrir el http://localhost:15672/  -->
+		<!--	Ejecutar lo siguiente:   -->
+		<!--	1.- rabbitmq-service remove		-->
+		<!--	2.- rabbitmq-service install	-->
+		<!--	3.- rabbitmq-server restart		-->
+		<!--	Luego intentar entrar nuevamente	-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-amqp</artifactId>
+		</dependency>
+
+	</dependencies>
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>${spring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
