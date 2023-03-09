@@ -2039,4 +2039,227 @@ agregar una nueva cuenta e indicar como login name: zipkin, limit to host matchi
 en esa misma ventana, dirigirse a la pestaña
 ```
 
+# Docker y Docker compose
 
+## Docker compose completo 
+
+### En el Dockerfile
+```yml
+version: '3.7'
+services:
+  config-server:
+    image: config-server:v1
+    ports:
+      - "8888:8888"
+    restart: always
+    networks:
+      - springcloud
+  servicio-eureka-server:
+    image: servicio-eureka-server:v1
+    ports:
+      - "8761:8761"
+    restart: always
+    networks:
+      - springcloud
+  microservicios-mysql8:
+    image: mysql:8
+    ports:
+      - "3306:3306"
+    restart: always
+    networks:
+      - springcloud
+    environment: 
+      MYSQL_DATABASE: db_springboot_cloud
+      MYSQL_ROOT_PASSWORD: sasa
+  microservicios-postgres12:
+    image: postgres:12-alpine
+    ports:
+      - "5432:5432"
+    restart: always
+    networks:
+      - springcloud
+    environment: 
+      POSTGRES_DB: db_springboot_cloud
+      POSTGRES_PASSWORD: sasa
+  servicio-productos:
+    image: servicio-productos:v1
+    restart: always
+    networks:
+      - springcloud
+    depends_on: 
+      - config-server
+      - servicio-eureka-server
+      - microservicios-mysql8
+  servicio-items:
+    image: servicio-items:v1
+    ports:
+      - "8002:8002"
+      - "8005:8005"
+      - "8007:8007"
+    restart: always
+    networks:
+      - springcloud
+    depends_on: 
+      - config-server
+      - servicio-eureka-server
+      - servicio-productos
+   servicio-usuarios:
+    image: servicio-usuarios:v1
+    restart: always
+    networks:
+      - springcloud
+    depends_on: 
+      - config-server
+      - servicio-eureka-server
+      - microservicios-postgres12
+   servicio-oauth:
+    image: servicio-oauth:v1
+    ports:
+      - "9100:9100"
+    restart: always
+    networks:
+      - springcloud
+    depends_on: 
+      - config-server
+      - servicio-eureka-server
+      - servicio-usuarios
+  servicio-zuul-server:
+    image: servicio-zuul-server:v1
+    ports:
+      - "8090:8090"
+    restart: always
+    networks:
+      - springcloud
+    depends_on: 
+      - config-server
+      - servicio-eureka-server
+      - servicio-productos
+      - servicio-items
+      - servicio-usuarios
+      - servicio-oauth
+  microservicios-rabbitmq38:
+    image: rabbitmq:3.8-management-alpine
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    restart: always
+    networks:
+      - springcloud
+  zipkin-server:
+    image: zipkin-server:v1
+    ports:
+      - "9411:9411"
+    restart: always
+    networks:
+      - springcloud
+    depends_on: 
+      - microservicios-rabbitmq38
+      - microservicios-mysql8
+    environment: 
+      RABBIT_ADDRESSES: microservicios-rabbitmq38:5672
+      STORAGE_TYPE: mysql
+      MYSQL_USER: zipkin
+      MYSQL_PASS: zipkin
+      MYSQL_HOST: microservicios-mysql8
+networks:
+  springcloud:
+```
+
+### Comandos de Docker 
+```
+======================== config-server
+
+.\mvnw clean package
+ 
+docker build -t config-server:v1 .
+docker network create spring-microservicios
+docker run -p 8888:8888 --name config-server --network springcloud config-server:v1
+
+
+======================== servicio-eureka-server
+
+.\mvnw clean package
+ 
+docker build -t servicio-eureka-server:v1 .
+docker run -p 8761:8761 --name servicio-eureka-server --network springcloud servicio-eureka-server:v1
+======================== mysql
+
+docker pull mysql:8
+docker run -p 3306:3306 --name microservicios-mysql8 --network springcloud -e MYSQL_ROOT_PASSWORD=sasa -e MYSQL_DATABASE=db_springboot_cloud -d mysql:8
+docker logs -f microservicios-mysql8
+
+
+======================== postgresql
+
+docker pull postgres:12-alpine
+docker run -p 5432:5432 --name microservicios-postgres12 --network springcloud -e POSTGRES_PASSWORD=sasa -e POSTGRES_DB=db_springboot_cloud -d postgres:12-alpine
+docker logs -f microservicios-postgres12
+
+
+======================== springboot-servicio-productos
+
+.\mvnw clean package -DskipTests
+ 
+docker build -t servicio-productos:v1 .
+docker run -P --network springcloud servicio-productos:v1
+
+
+======================== springboot-servicio-zuul-server
+
+.\mvnw clean package -DskipTests
+ 
+docker build -t servicio-zuul-server:v1 .
+docker run -p 8090:8090 --network springcloud servicio-zuul-server:v1
+
+
+======================== springboot-servicio-usuarios
+
+.\mvnw clean package -DskipTests
+ 
+docker build -t servicio-usuarios:v1 .
+docker run -P --network springcloud servicio-usuarios:v1
+
+
+======================== springboot-servicio-oauth
+
+.\mvnw clean package -DskipTests
+ 
+docker build -t servicio-oauth:v1 .
+docker run -p 9100:9100 --network springcloud servicio-oauth:v1
+
+
+======================== springboot-servicio-item
+
+.\mvnw clean package -DskipTests
+ 
+docker build -t servicio-items:v1 .
+docker run -p 8002:8002 -p 8005:8005 -p 8007:8007 --network springcloud servicio-items:v1
+
+
+======================== rabbitmq
+
+docker pull rabbitmq:3.8-management-alpine
+docker run -p 15672:15672 -p 5672:5672 --name microservicios-rabbitmq38 --network springcloud -d rabbitmq:3.8-management-alpine
+ 
+docker logs -f microservicios-rabbitmq38
+
+
+======================== zipkin
+
+docker build -t zipkin-server:v1 .
+docker run -p 9411:9411 --name zipkin-server --network springcloud -e RABBIT_ADDRESSES=microservicios-rabbitmq38:5672 -e STORAGE_TYPE=mysql -e MYSQL_USER=zipkin -e MYSQL_PASS=zipkin -e MYSQL_HOST=microservicios-mysql8 zipkin-server:v1
+docker logs -f zipkin-server
+
+
+======================== Otros comandos
+
+detener y eliminar todos los contenedores:
+
+docker stop $(docker ps -q)
+docker rm $(docker ps -a -q)
+
+
+eliminar todas las imagenes:
+
+docker rmi $(docker images -a -q)
+```
